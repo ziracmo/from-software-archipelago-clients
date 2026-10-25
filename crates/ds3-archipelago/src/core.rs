@@ -117,6 +117,76 @@ impl shared::Core for Core {
         };
 
         match command {
+            // Shows how many foreign items this save has been granted compared
+            // to how many the server has sent. If the first number is higher,
+            // no further items will ever be granted until it's corrected.
+            "!granted" => {
+                let total = self.client().map(|c| c.received_items().len());
+                let granted = SaveData::instance().map(|s| s.items_granted);
+                let (Some(granted), Some(total)) = (granted, total) else {
+                    self.log(RichText::Color {
+                        text: "Load your save and connect to the server first.".into(),
+                        color: ap::TextColor::Red,
+                    });
+                    return true;
+                };
+
+                self.log(vec![
+                    "Items granted to this save: ".into(),
+                    RichText::Color {
+                        text: granted.to_string(),
+                        color: if granted > total {
+                            ap::TextColor::Red
+                        } else {
+                            ap::TextColor::Green
+                        },
+                    },
+                    ". Items received from the server: ".into(),
+                    RichText::Color {
+                        text: total.to_string(),
+                        color: ap::TextColor::Blue,
+                    },
+                    ".".into(),
+                ]);
+                true
+            }
+
+            // Overrides the number of foreign items this save has been granted.
+            // Items whose server index is at least COUNT will be granted again,
+            // one per second.
+            "!setgranted" => {
+                let Some(count) = arg.and_then(|a| usize::from_str(a.trim()).ok()) else {
+                    arg_error("!setgranted COUNT");
+                    return true;
+                };
+
+                let Some(mut save) = SaveData::instance_mut() else {
+                    self.log(RichText::Color {
+                        text: "Load your save first.".into(),
+                        color: ap::TextColor::Red,
+                    });
+                    return true;
+                };
+                let old = save.items_granted;
+                save.items_granted = count;
+                drop(save);
+
+                self.log(vec![
+                    "Items granted changed from ".into(),
+                    RichText::Color {
+                        text: old.to_string(),
+                        color: ap::TextColor::Blue,
+                    },
+                    " to ".into(),
+                    RichText::Color {
+                        text: count.to_string(),
+                        color: ap::TextColor::Green,
+                    },
+                    ". Rest at a bonfire so the game saves it.".into(),
+                ]);
+                true
+            }
+
             "!getevent" => {
                 let Some(flag) = arg.and_then(|f| u32::from_str(f).ok()) else {
                     arg_error("!getevent EVENT_FLAG");
